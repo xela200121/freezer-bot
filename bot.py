@@ -175,7 +175,7 @@ class GestioneAlimentoView(discord.ui.View):
         self.alimento['quantita'] = nuova_quantita
         
         # Notifica se finito
-        if nuova_quantita == 0:
+        if nuova_quantita == 1:
             await notifica_quantita_finita(interaction.user, self.alimento)
         
         await interaction.edit_original_response(
@@ -903,7 +903,7 @@ async def help_command(interaction: discord.Interaction):
     
     embed.add_field(
         name="⚠️ Notifica quantità finita",
-        value="Quando la quantità arriva a 0, riceverai una notifica con "
+        value="Quando la quantità arriva a 1, riceverai una notifica con "
               "i grammi da comprare per quel giorno della settimana.",
         inline=False
     )
