@@ -989,13 +989,12 @@ async def start_web_server():
 
 if __name__ == "__main__":
     try:
-        # Crea event loop
         loop = asyncio.get_event_loop()
-        
-        # Avvia web server in background
-        loop.create_task(start_web_server())
-        
-        # Avvia il bot
-        bot.run(TOKEN)
-    except Exception as e:
-        print(f"❌ Errore avvio bot: {e}")
+        loop.create_task(start_web_server())  # Avvia il web server in parallelo
+        loop.create_task(bot.start(TOKEN))    # Avvia il bot
+        loop.run_forever()
+    except KeyboardInterrupt:
+        print("🛑 Arresto manuale del bot...")
+    finally:
+        loop.run_until_complete(bot.close())
+        print("✅ Bot chiuso correttamente.")
