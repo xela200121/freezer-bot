@@ -961,12 +961,41 @@ async def on_command_error(ctx, error):
     print(f'Errore: {error}')
 
 
+from aiohttp import web
+import threading
+
+# ==================== SERVER HTTP PER RENDER FITTIZIO ====================
+
+async def health_check(request):
+    """Endpoint per health check di Render"""
+    return web.Response(text="Bot is running!")
+
+async def start_web_server():
+    """Avvia un semplice web server per Render"""
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    app.router.add_get('/health', health_check)
+    
+    port = int(os.getenv('PORT', 10000))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f'✅ Web server avviato sulla porta {port}')
+
 
 # ==================== AVVIO BOT ====================
 
 
 if __name__ == "__main__":
     try:
+        # Crea event loop
+        loop = asyncio.get_event_loop()
+        
+        # Avvia web server in background
+        loop.create_task(start_web_server())
+        
+        # Avvia il bot
         bot.run(TOKEN)
     except Exception as e:
         print(f"❌ Errore avvio bot: {e}")
