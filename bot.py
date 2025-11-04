@@ -309,7 +309,7 @@ class SelezioneGiornoView(discord.ui.View):
                   for num, giorno in GIORNI.items()]
         
         select = discord.ui.Select(
-            placeholder="Per quale giorno lo scongeli?",
+            placeholder="In quale giorno mangerai l'alimento "+nome+"?",
             options=options
         )
         select.callback = self.select_giorno_callback
