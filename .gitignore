@@ -416,3 +416,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+#Script AI
+concat.py
+codice_completo.txt
