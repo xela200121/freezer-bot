@@ -19,16 +19,20 @@ MONGODB_URI = os.getenv('MONGODB_URI')
 client = MongoClient(MONGODB_URI)
 db = client['freezerbot']
 alimenti_collection = db['alimenti']
+user_threads_collection = db['user_threads']  # Nuova collezione per tracciare i thread degli utenti
+
 
 
 # Configurazione bot
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 
 # Scheduler per notifiche
 scheduler = AsyncIOScheduler()
+
 
 
 # Dizionari di mapping
@@ -41,7 +45,9 @@ GIORNI = {
 GIORNI_INVERSO = {v: k for k, v in GIORNI.items()}
 
 
+
 # ==================== FUNZIONI HELPER ====================
+
 
 
 def crea_id_univoco(nome, giorno, portion):
@@ -49,9 +55,11 @@ def crea_id_univoco(nome, giorno, portion):
     return f"{nome.lower()}_{giorno}_{portion}"
 
 
+
 def get_alimenti_utente(user_id):
     """Ottiene tutti gli alimenti di un utente"""
     return list(alimenti_collection.find({"user_id": str(user_id)}))
+
 
 
 def get_alimento_by_id(user_id, id_univoco):
@@ -60,6 +68,7 @@ def get_alimento_by_id(user_id, id_univoco):
         "user_id": str(user_id),
         "id_univoco": id_univoco
     })
+
 
 
 def aggiorna_quantita(user_id, id_univoco, delta):
@@ -78,6 +87,7 @@ def aggiorna_quantita(user_id, id_univoco, delta):
     return nuova_quantita
 
 
+
 def rimuovi_alimento(user_id, id_univoco):
     """Rimuove un alimento"""
     result = alimenti_collection.delete_one({
@@ -87,7 +97,160 @@ def rimuovi_alimento(user_id, id_univoco):
     return result.deleted_count > 0
 
 
+
+def get_user_thread(guild_id, user_id):
+    """Ottiene il thread di un utente"""
+    return user_threads_collection.find_one({
+        "guild_id": str(guild_id),
+        "user_id": str(user_id)
+    })
+
+
+
+def save_user_thread(guild_id, user_id, channel_id, thread_id):
+    """Salva il thread di un utente"""
+    user_threads_collection.update_one(
+        {"guild_id": str(guild_id), "user_id": str(user_id)},
+        {"$set": {
+            "channel_id": str(channel_id),
+            "thread_id": str(thread_id),
+            "created_at": datetime.now().isoformat()
+        }},
+        upsert=True
+    )
+
+
+
+# ==================== GESTIONE THREAD PRIVATI ====================
+
+
+
+async def crea_thread_utente(guild, member):
+    """Crea o recupera il thread privato per un utente"""
+    try:
+        # Nome del canale principale
+        nome_canale = "lista-spesa"
+        
+        # Cerca il canale #lista-spesa
+        canale = discord.utils.get(guild.text_channels, name=nome_canale)
+        
+        # Se non esiste, crealo
+        if not canale:
+            print(f"📝 Creazione canale #{nome_canale}...")
+            canale = await guild.create_text_channel(
+                nome_canale,
+                topic="📋 Canale per le liste della spesa personali",
+                reason="Creato automaticamente da FreezerBot"
+            )
+            print(f"✅ Canale #{nome_canale} creato!")
+        
+        # Controlla se l'utente ha già un thread
+        thread_data = get_user_thread(guild.id, member.id)
+        
+        if thread_data:
+            # Prova a recuperare il thread esistente
+            try:
+                thread = guild.get_thread(int(thread_data['thread_id']))
+                if thread:
+                    print(f"♻️ Thread esistente trovato per {member.name}")
+                    return thread
+            except:
+                print(f"⚠️ Thread salvato non trovato, ne creo uno nuovo")
+        
+        # Crea un nuovo thread privato
+        nome_thread = f"🧊 Freezer di {member.display_name}"
+        
+        thread = await canale.create_thread(
+            name=nome_thread,
+            type=discord.ChannelType.private_thread,
+            reason=f"Thread privato per {member.name}",
+            invitable=False  # Solo il bot può invitare
+        )
+        
+        print(f"✅ Thread privato creato per {member.name}")
+        
+        # Salva il thread nel database
+        save_user_thread(guild.id, member.id, canale.id, thread.id)
+        
+        # Invita l'utente nel thread
+        await thread.add_user(member)
+        print(f"✅ {member.name} aggiunto al thread")
+        
+        # Messaggio di benvenuto
+        embed = discord.Embed(
+            title=f"👋 Benvenuto nel tuo Freezer personale, {member.display_name}!",
+            description="Questo è il tuo spazio privato per gestire il congelatore.",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="🎯 Cosa puoi fare qui",
+            value="• Gestire gli alimenti nel tuo freezer\n"
+                  "• Ricevere promemoria per scongelare\n"
+                  "• Tenere traccia delle quantità\n"
+                  "• Ricevere notifiche quando finiscono gli alimenti",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🚀 Come iniziare",
+            value="Usa il comando `/menu` per aprire il menu principale!\n"
+                  "Oppure usa `/help` per vedere tutti i comandi disponibili.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🔒 Privacy",
+            value="Questo thread è **privato**: solo tu e il bot potete vedere i messaggi qui dentro.",
+            inline=False
+        )
+        
+        embed.set_footer(text="FreezerBot 🧊 | Il tuo assistente per il congelatore")
+        
+        await thread.send(embed=embed)
+        
+        # Invia anche il menu principale
+        await thread.send("Ecco il tuo menu principale:")
+        
+        # Crea un'interazione fittizia per mostrare il menu
+        # Nota: questo è un workaround, idealmente il menu dovrebbe essere mostrato con un comando
+        menu_embed = discord.Embed(
+            title="🧊 FreezerBot",
+            description="Gestisci il tuo congelatore facilmente!",
+            color=discord.Color.blue()
+        )
+        menu_embed.add_field(
+            name="📋 Lista",
+            value="Vedi tutti gli alimenti",
+            inline=False
+        )
+        menu_embed.add_field(
+            name="➕ Aggiungi",
+            value="Aggiungi alimenti o porzioni",
+            inline=False
+        )
+        menu_embed.add_field(
+            name="⚙️ Impostazioni",
+            value="Modifica reminder e notifiche",
+            inline=False
+        )
+        
+        view = MenuPrincipale()
+        await thread.send(embed=menu_embed, view=view)
+        
+        return thread
+        
+    except discord.Forbidden:
+        print(f"❌ Permessi insufficienti per creare thread in {guild.name}")
+        return None
+    except Exception as e:
+        print(f"❌ Errore nella creazione del thread: {e}")
+        return None
+
+
+
 # ==================== VIEWS (BOTTONI E MENU) ====================
+
 
 
 class MenuPrincipale(discord.ui.View):
@@ -109,6 +272,7 @@ class MenuPrincipale(discord.ui.View):
     async def impostazioni_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         await mostra_impostazioni(interaction)
+
 
 
 
@@ -147,6 +311,7 @@ class ListaAlimentiView(discord.ui.View):
     async def menu_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         await mostra_menu_principale(interaction)
+
 
 
 
@@ -205,6 +370,7 @@ class GestioneAlimentoView(discord.ui.View):
 
 
 
+
 class AggiungiAlimentoView(discord.ui.View):
     """View per aggiungere nuovo alimento o porzione esistente"""
     def __init__(self, user_id):
@@ -257,6 +423,7 @@ class AggiungiAlimentoView(discord.ui.View):
 
 
 
+
 class NuovoAlimentoModal(discord.ui.Modal, title="➕ Aggiungi Nuovo Alimento"):
     """Modal per inserire dati nuovo alimento"""
     
@@ -295,6 +462,7 @@ class NuovoAlimentoModal(discord.ui.Modal, title="➕ Aggiungi Nuovo Alimento"):
 
 
 
+
 class SelezioneGiornoView(discord.ui.View):
     """View per selezionare il giorno di scongelamento"""
     def __init__(self, nome, quantita, portion_to_buy, user_id):
@@ -325,6 +493,7 @@ class SelezioneGiornoView(discord.ui.View):
             self.portion_to_buy,
             giorno
         )
+
 
 
 
@@ -388,6 +557,7 @@ class SelezioneOrarioView(discord.ui.View):
 
 
 
+
 class ImpostazioniView(discord.ui.View):
     """View per le impostazioni"""
     def __init__(self, user_id):
@@ -422,6 +592,7 @@ class ImpostazioniView(discord.ui.View):
     async def menu(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         await mostra_menu_principale(interaction)
+
 
 
 
@@ -513,7 +684,9 @@ class ModificaAlimentoView(discord.ui.View):
 
 
 
+
 # ==================== FUNZIONI DI VISUALIZZAZIONE ====================
+
 
 
 async def mostra_menu_principale(interaction: discord.Interaction):
@@ -545,6 +718,7 @@ async def mostra_menu_principale(interaction: discord.Interaction):
     view = MenuPrincipale()
     
     await interaction.edit_original_response(embed=embed, view=view)
+
 
 
 
@@ -588,6 +762,7 @@ async def mostra_lista(interaction: discord.Interaction):
 
 
 
+
 async def mostra_gestione_alimento(interaction: discord.Interaction, id_univoco: str):
     """Mostra la gestione di un singolo alimento"""
     alimento = get_alimento_by_id(interaction.user.id, id_univoco)
@@ -600,6 +775,7 @@ async def mostra_gestione_alimento(interaction: discord.Interaction, id_univoco:
     view = GestioneAlimentoView(alimento, interaction.user.id)
     
     await interaction.edit_original_response(embed=embed, view=view)
+
 
 
 
@@ -639,6 +815,7 @@ def crea_embed_alimento(alimento):
 
 
 
+
 async def mostra_menu_aggiungi(interaction: discord.Interaction):
     """Mostra menu per aggiungere alimenti"""
     if not interaction.response.is_done():
@@ -653,6 +830,7 @@ async def mostra_menu_aggiungi(interaction: discord.Interaction):
     view = AggiungiAlimentoView(interaction.user.id)
     
     await interaction.edit_original_response(embed=embed, view=view)
+
 
 
 
@@ -691,6 +869,7 @@ async def mostra_selezione_variante(interaction: discord.Interaction, nome: str,
 
 
 
+
 async def mostra_selezione_giorno(interaction: discord.Interaction, nome: str, quantita: int, portion_to_buy: int):
     """Mostra menu per selezionare il giorno"""
     embed = discord.Embed(
@@ -704,6 +883,7 @@ async def mostra_selezione_giorno(interaction: discord.Interaction, nome: str, q
 
 
 
+
 async def mostra_selezione_orario(interaction: discord.Interaction, nome: str, quantita: int, portion_to_buy: int, giorno: int):
     """Mostra menu per selezionare l'orario"""
     embed = discord.Embed(
@@ -714,6 +894,7 @@ async def mostra_selezione_orario(interaction: discord.Interaction, nome: str, q
     
     view = SelezioneOrarioView(nome, quantita, portion_to_buy, giorno, interaction.user.id)
     await interaction.edit_original_response(embed=embed, view=view)
+
 
 
 
@@ -743,6 +924,7 @@ async def mostra_impostazioni(interaction: discord.Interaction):
 
 
 
+
 async def mostra_menu_modifica(interaction: discord.Interaction, alimento: dict):
     """Mostra menu per modificare un alimento"""
     embed = discord.Embed(
@@ -765,7 +947,9 @@ async def mostra_menu_modifica(interaction: discord.Interaction, alimento: dict)
 
 
 
+
 # ==================== SISTEMA NOTIFICHE ====================
+
 
 
 async def notifica_quantita_finita(user, alimento):
@@ -785,6 +969,7 @@ async def notifica_quantita_finita(user, alimento):
         await user.send(embed=embed)
     except discord.Forbidden:
         print(f"Impossibile inviare DM a {user.id}")
+
 
 
 
@@ -845,13 +1030,16 @@ async def controlla_reminder():
 
 
 
+
 # ==================== COMANDI SLASH ====================
+
 
 
 @bot.tree.command(name="menu", description="Mostra il menu principale di FreezerBot")
 async def menu_command(interaction: discord.Interaction):
     """Comando /menu per aprire il menu principale"""
     await mostra_menu_principale(interaction)
+
 
 
 
@@ -862,6 +1050,7 @@ async def lista_command(interaction: discord.Interaction):
 
 
 
+
 @bot.tree.command(name="aggiungi", description="Aggiungi alimenti o porzioni")
 async def aggiungi_command(interaction: discord.Interaction):
     """Comando /aggiungi"""
@@ -869,10 +1058,12 @@ async def aggiungi_command(interaction: discord.Interaction):
 
 
 
+
 @bot.tree.command(name="impostazioni", description="Modifica impostazioni alimenti")
 async def impostazioni_command(interaction: discord.Interaction):
     """Comando /impostazioni"""
     await mostra_impostazioni(interaction)
+
 
 
 
@@ -920,7 +1111,9 @@ async def help_command(interaction: discord.Interaction):
 
 
 
+
 # ==================== EVENTI BOT ====================
+
 
 
 @bot.event
@@ -953,6 +1146,32 @@ async def on_ready():
 
 
 
+
+@bot.event
+async def on_member_join(member):
+    """Evento quando un nuovo utente entra nel server"""
+    print(f"👋 Nuovo membro: {member.name} (ID: {member.id})")
+    
+    # Ignora i bot
+    if member.bot:
+        print(f"🤖 {member.name} è un bot, lo ignoro")
+        return
+    
+    try:
+        # Crea il thread privato per l'utente
+        thread = await crea_thread_utente(member.guild, member)
+        
+        if thread:
+            print(f"✅ Thread creato con successo per {member.name}")
+        else:
+            print(f"⚠️ Impossibile creare thread per {member.name}")
+            
+    except Exception as e:
+        print(f"❌ Errore nella gestione del nuovo membro {member.name}: {e}")
+
+
+
+
 @bot.event
 async def on_command_error(ctx, error):
     """Gestisce errori nei comandi"""
@@ -961,14 +1180,18 @@ async def on_command_error(ctx, error):
     print(f'Errore: {error}')
 
 
+
 from aiohttp import web
 import threading
 
-# ==================== SERVER HTTP PER RENDER FITTIZIO ====================
+
+# ==================== SERVER HTTP PER RENDER ====================
+
 
 async def health_check(request):
     """Endpoint per health check di Render"""
     return web.Response(text="Bot is running!")
+
 
 async def start_web_server():
     """Avvia un semplice web server per Render"""
@@ -984,7 +1207,9 @@ async def start_web_server():
     print(f'✅ Web server avviato sulla porta {port}')
 
 
+
 # ==================== AVVIO BOT ====================
+
 
 
 if __name__ == "__main__":
