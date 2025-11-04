@@ -1110,7 +1110,52 @@ async def help_command(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
+@bot.tree.command(name="crea_mio_thread", description="[ADMIN] Crea il tuo thread personale per il freezer")
+@app_commands.checks.has_permissions(administrator=True)
+async def crea_mio_thread_command(interaction: discord.Interaction):
+    """Permette a un admin di creare il proprio thread"""
+    await interaction.response.defer(ephemeral=True)
+    
+    # Controlla se l'admin ha già un thread
+    thread_esistente = get_user_thread(interaction.guild.id, interaction.user.id)
+    
+    if thread_esistente:
+        # Prova a recuperare il thread
+        try:
+            thread = interaction.guild.get_thread(int(thread_esistente['thread_id']))
+            if thread:
+                await interaction.followup.send(
+                    f"✅ Hai già un thread attivo: {thread.mention}",
+                    ephemeral=True
+                )
+                return
+        except:
+            # Thread non trovato, ne creiamo uno nuovo
+            pass
+    
+    # Crea il thread per l'admin
+    thread = await crea_thread_utente(interaction.guild, interaction.user)
+    
+    if thread:
+        await interaction.followup.send(
+            f"✅ Thread personale creato con successo: {thread.mention}\n"
+            f"Usa `/menu` per iniziare a gestire il tuo freezer!",
+            ephemeral=True
+        )
+    else:
+        await interaction.followup.send(
+            "❌ Errore nella creazione del thread. Controlla i permessi del bot.",
+            ephemeral=True
+        )
 
+@crea_mio_thread_command.error
+async def crea_mio_thread_error(interaction: discord.Interaction, error):
+    """Gestisce errori di permessi"""
+    if isinstance(error, app_commands.errors.MissingPermissions):
+        await interaction.response.send_message(
+            "❌ Solo gli amministratori possono usare questo comando!",
+            ephemeral=True
+        )
 
 # ==================== EVENTI BOT ====================
 
