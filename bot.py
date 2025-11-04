@@ -50,9 +50,9 @@ GIORNI_INVERSO = {v: k for k, v in GIORNI.items()}
 
 
 
-def crea_id_univoco(nome, giorno, portion):
+def crea_id_univoco(nome, giorno, portion, user_id):
     """Crea ID univoco per l'alimento"""
-    return f"{nome.lower()}_{giorno}_{portion}"
+    return f"{nome.lower()}_{giorno}_{portion}_{user_id}"
 
 
 
@@ -526,7 +526,7 @@ class SelezioneOrarioView(discord.ui.View):
         reminder_day = self.giorno - 1 if self.giorno > 1 else 7
         
         # Crea ID univoco
-        id_univoco = crea_id_univoco(self.nome, self.giorno, self.portion_to_buy)
+        id_univoco = crea_id_univoco(self.nome, self.giorno, self.portion_to_buy, self.user_id)
         
         # Salva nel database
         alimenti_collection.insert_one({
