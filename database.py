@@ -55,8 +55,18 @@ class DatabaseManager:
     
     @staticmethod
     def inserisci_alimento(alimento_data):
-        """Inserisce un nuovo alimento"""
-        return alimenti_collection.insert_one(alimento_data)
+        """Inserisce un nuovo alimento o aggiorna la quantità se esiste"""
+        result = alimenti_collection.update_one(
+            {"id_univoco": alimento_data["id_univoco"]},
+            {
+                "$inc": {"quantita": alimento_data["quantita"]},
+                "$setOnInsert": alimento_data
+            },
+            upsert=True
+        )
+        return result
+
+
     
     @staticmethod
     def aggiorna_alimento(user_id, id_univoco, updates):
