@@ -70,50 +70,56 @@ class BotCommands:
             )
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
-        
-        @bot.tree.command(name="crea_mio_thread", description="[ADMIN] Crea il tuo thread personale per il freezer")
-        @app_commands.checks.has_permissions(administrator=True)
-        async def crea_mio_thread_command(interaction: discord.Interaction):
-            """Permette a un admin di creare il proprio thread"""
+
+        @bot.tree.command(name="pulisci", description="Cancella tutti i messaggi nel thread (escluso il menu principale)")
+        async def pulisci_command(interaction: discord.Interaction):
+            """Comando per pulire la cronologia del thread"""
             await interaction.response.defer(ephemeral=True)
             
-            # Controlla se l'admin ha già un thread
-            thread_esistente = DatabaseManager.get_user_thread(interaction.guild.id, interaction.user.id)
-            
-            if thread_esistente:
-                # Prova a recuperare il thread
-                try:
-                    thread = interaction.guild.get_thread(int(thread_esistente['thread_id']))
-                    if thread:
-                        await interaction.followup.send(
-                            f"✅ Hai già un thread attivo: {thread.mention}",
-                            ephemeral=True
-                        )
-                        return
-                except:
-                    # Thread non trovato, ne creiamo uno nuovo
-                    pass
-            
-            # Crea il thread per l'admin
-            thread = await ThreadManager.crea_thread_utente(interaction.guild, interaction.user)
-            
-            if thread:
+            try:
+                # Verifica che siamo in un thread
+                if not isinstance(interaction.channel, discord.Thread):
+                    await interaction.followup.send(
+                        "⚠️ Questo comando funziona solo nei thread privati!",
+                        ephemeral=True
+                    )
+                    return
+                
+                # Verifica che sia il thread dell'utente
+                thread_data = DatabaseManager.get_user_thread(interaction.guild.id, interaction.user.id)
+                if not thread_data or str(interaction.channel.id) != thread_data['thread_id']:
+                    await interaction.followup.send(
+                        "⚠️ Puoi usare questo comando solo nel tuo thread personale!",
+                        ephemeral=True
+                    )
+                    return
+                
+                # Conta e elimina i messaggi
+                deleted_count = 0
+                async for message in interaction.channel.history(limit=100):
+                    # Non eliminare il messaggio di benvenuto e il menu principale
+                    if message.author == interaction.client.user:
+                        # Controlla se ha il menu principale (view con bottoni)
+                        if message.components:
+                            continue
+                    
+                    try:
+                        await message.delete()
+                        deleted_count += 1
+                    except discord.Forbidden:
+                        continue
+                    except discord.NotFound:
+                        continue
+                
                 await interaction.followup.send(
-                    f"✅ Thread personale creato con successo: {thread.mention}\n"
-                    f"Usa `/menu` per iniziare a gestire il tuo freezer!",
+                    f"🧹 Thread pulito! Eliminati **{deleted_count}** messaggi.",
                     ephemeral=True
                 )
-            else:
+                
+            except Exception as e:
+                print(f"Errore pulizia thread: {e}")
                 await interaction.followup.send(
-                    "❌ Errore nella creazione del thread. Controlla i permessi del bot.",
+                    "❌ Errore durante la pulizia del thread.",
                     ephemeral=True
                 )
-        
-        @crea_mio_thread_command.error
-        async def crea_mio_thread_error(interaction: discord.Interaction, error):
-            """Gestisce errori di permessi"""
-            if isinstance(error, app_commands.errors.MissingPermissions):
-                await interaction.response.send_message(
-                    "❌ Solo gli amministratori possono usare questo comando!",
-                    ephemeral=True
-                )
+
