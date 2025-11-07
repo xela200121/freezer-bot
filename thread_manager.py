@@ -126,11 +126,7 @@ class ThreadManager:
             value="Aggiungi alimenti o porzioni",
             inline=False
         )
-        menu_embed.add_field(
-            name="⚙️ Modifica alimenti",
-            value="Modifica reminder e notifiche",
-            inline=False
-        )
+
         
         view = MenuPrincipale()
         await thread.send(embed=menu_embed, view=view)

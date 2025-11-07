@@ -24,12 +24,7 @@ class MenuPrincipale(ui.View):
         from ui_handlers import UIHandlers
         await interaction.response.defer()
         await UIHandlers.mostra_menu_aggiungi(interaction)
-    
-    @ui.button(label="⚙️ Modifica alimenti", style=discord.ButtonStyle.secondary, custom_id="modifica_alimenti")
-    async def modifica_alimenti_button(self, interaction: discord.Interaction, button: ui.Button):
-        from ui_handlers import UIHandlers
-        await interaction.response.defer()
-        await UIHandlers.mostra_modifica_alimenti(interaction)
+
 
 
 class ListaAlimentiView(ui.View):

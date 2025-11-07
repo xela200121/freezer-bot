@@ -33,12 +33,7 @@ class UIHandlers:
             value="Aggiungi alimenti o porzioni",
             inline=False
         )
-        embed.add_field(
-            name="⚙️ Modifica alimenti",
-            value="Modifica reminder e notifiche",
-            inline=False
-        )
-        
+
         view = MenuPrincipale()
         
         await interaction.edit_original_response(embed=embed, view=view)
