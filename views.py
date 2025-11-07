@@ -275,32 +275,145 @@ class SelezioneOrarioView(ui.View):
         select.callback = self.select_orario_callback
         self.add_item(select)
     
+
     async def select_orario_callback(self, interaction: discord.Interaction):
+        try:
+            await interaction.response.defer()
+            orario = interaction.data['values'][0]
+            
+            # Crea dizionario alimento
+            alimento_dict = AlimentoHelper.crea_alimento_dict(
+                self.user_id, self.nome, self.quantita, 
+                self.portion_to_buy, self.giorno, orario
+            )
+            
+            # CONTROLLA SE ESISTE GIÀ
+            alimento_esistente = DatabaseManager.alimento_esiste(alimento_dict['id_univoco'])
+            
+            if alimento_esistente:
+                # L'alimento esiste già, chiedi conferma
+                embed = discord.Embed(
+                    title="⚠️ Alimento Esistente!",
+                    description=f"Hai già **{self.nome.capitalize()}** per {GIORNI[self.giorno]} con {self.portion_to_buy}g!",
+                    color=discord.Color.orange()
+                )
+                embed.add_field(
+                    name="📦 Quantità attuale",
+                    value=f"{alimento_esistente['quantita']} porzioni",
+                    inline=True
+                )
+                embed.add_field(
+                    name="➕ Quantità da aggiungere",
+                    value=f"{self.quantita} porzioni",
+                    inline=True
+                )
+                embed.add_field(
+                    name="📊 Totale",
+                    value=f"{alimento_esistente['quantita'] + self.quantita} porzioni",
+                    inline=True
+                )
+                embed.set_footer(text="Vuoi aggiungere la quantità all'alimento esistente?")
+                
+                view = ConfermaIncrementoView(alimento_esistente, alimento_dict, self.user_id)
+                await interaction.edit_original_response(embed=embed, view=view)
+            else:
+                # Alimento nuovo, inserisci normalmente
+                result = DatabaseManager.inserisci_alimento_nuovo(alimento_dict)
+                
+                if result is None:
+                    await interaction.followup.send(
+                        content="❌ Errore durante il salvataggio nel database. Riprova!",
+                        ephemeral=True
+                    )
+                    return
+                
+                reminder_day = AlimentoHelper.calcola_reminder_day(self.giorno)
+                
+                embed = discord.Embed(
+                    title="✅ Alimento Aggiunto!",
+                    description=f"**{self.nome.capitalize()}** è stato aggiunto al freezer!",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="📦 Quantità", value=f"{self.quantita} porzioni", inline=True)
+                embed.add_field(name="📅 Per il giorno", value=GIORNI[self.giorno], inline=True)
+                embed.add_field(name="📢 Reminder", value=f"{GIORNI[reminder_day]} alle {orario}", inline=True)
+                embed.add_field(name="🛒 Da comprare", value=f"{self.portion_to_buy}g", inline=True)
+                
+                await interaction.edit_original_response(embed=embed, view=None)
+            
+        except Exception as e:
+            print(f"❌ Errore nel callback orario: {e}")
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    content="❌ Si è verificato un errore. Riprova!",
+                    ephemeral=True
+                )
+            else:
+                await interaction.followup.send(
+                    content="❌ Si è verificato un errore. Riprova!",
+                    ephemeral=True
+                )
+
+
+class ConfermaIncrementoView(ui.View):
+    """View per confermare l'incremento di un alimento esistente"""
+    def __init__(self, alimento_esistente, alimento_nuovo, user_id):
+        super().__init__(timeout=180)
+        self.alimento_esistente = alimento_esistente
+        self.alimento_nuovo = alimento_nuovo
+        self.user_id = user_id
+    
+    @ui.button(label="✅ Sì, aggiungi quantità", style=discord.ButtonStyle.green)
+    async def conferma_button(self, interaction: discord.Interaction, button: ui.Button):
+        try:
+            await interaction.response.defer()
+            
+            # Incrementa la quantità
+            result = DatabaseManager.incrementa_quantita_alimento(
+                self.alimento_esistente['id_univoco'],
+                self.alimento_nuovo['quantita']
+            )
+            
+            if result:
+                nuova_quantita = self.alimento_esistente['quantita'] + self.alimento_nuovo['quantita']
+                
+                embed = discord.Embed(
+                    title="✅ Quantità Aggiornata!",
+                    description=f"**{self.alimento_esistente['nome_alimento'].capitalize()}** aggiornato!",
+                    color=discord.Color.green()
+                )
+                embed.add_field(
+                    name="📦 Nuova Quantità",
+                    value=f"{nuova_quantita} porzioni",
+                    inline=True
+                )
+                embed.add_field(
+                    name="📅 Per il giorno",
+                    value=GIORNI[self.alimento_esistente['scongela_per_giorno']],
+                    inline=True
+                )
+                
+                await interaction.edit_original_response(embed=embed, view=None)
+            else:
+                await interaction.followup.send(
+                    content="❌ Errore durante l'aggiornamento. Riprova!",
+                    ephemeral=True
+                )
+        except Exception as e:
+            print(f"❌ Errore conferma incremento: {e}")
+            await interaction.followup.send(
+                content="❌ Si è verificato un errore. Riprova!",
+                ephemeral=True
+            )
+    
+    @ui.button(label="❌ No, annulla", style=discord.ButtonStyle.red)
+    async def annulla_button(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.defer()
-        orario = interaction.data['values'][0]
-        
-        # Crea dizionario alimento
-        alimento_dict = AlimentoHelper.crea_alimento_dict(
-            self.user_id, self.nome, self.quantita, 
-            self.portion_to_buy, self.giorno, orario
+        await interaction.edit_original_response(
+            content="❌ Operazione annullata.",
+            view=None
         )
-        
-        # Salva nel database
-        DatabaseManager.inserisci_alimento(alimento_dict)
-        
-        reminder_day = AlimentoHelper.calcola_reminder_day(self.giorno)
-        
-        embed = discord.Embed(
-            title="✅ Alimento Aggiunto!",
-            description=f"**{self.nome.capitalize()}** è stato aggiunto al freezer!",
-            color=discord.Color.green()
-        )
-        embed.add_field(name="📦 Quantità", value=f"{self.quantita} porzioni", inline=True)
-        embed.add_field(name="📅 Per il giorno", value=GIORNI[self.giorno], inline=True)
-        embed.add_field(name="📢 Reminder", value=f"{GIORNI[reminder_day]} alle {orario}", inline=True)
-        embed.add_field(name="🛒 Da comprare", value=f"{self.portion_to_buy}g", inline=True)
-        
-        await interaction.edit_original_response(embed=embed, view=None)
+
 
 
 class ImpostazioniView(ui.View):

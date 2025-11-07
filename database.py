@@ -54,19 +54,39 @@ class DatabaseManager:
         return result.deleted_count > 0
     
     @staticmethod
-    def inserisci_alimento(alimento_data):
-        """Inserisce un nuovo alimento o aggiorna la quantità se esiste"""
-        result = alimenti_collection.update_one(
-            {"id_univoco": alimento_data["id_univoco"]},
-            {
-                "$inc": {"quantita": alimento_data["quantita"]},
-                "$setOnInsert": alimento_data
-            },
-            upsert=True
-        )
-        return result
+    def alimento_esiste(id_univoco):
+        """Controlla se un alimento esiste già"""
+        try:
+            alimento = alimenti_collection.find_one({"id_univoco": id_univoco})
+            return alimento
+        except Exception as e:
+            print(f"❌ Errore controllo esistenza: {e}")
+            return None
 
+    @staticmethod
+    def inserisci_alimento_nuovo(alimento_data):
+        """Inserisce un nuovo alimento SENZA fare upsert"""
+        try:
+            result = alimenti_collection.insert_one(alimento_data)
+            print(f"✅ Alimento inserito: {alimento_data['nome_alimento']}")
+            return result
+        except Exception as e:
+            print(f"❌ Errore inserimento: {e}")
+            return None
 
+    @staticmethod
+    def incrementa_quantita_alimento(id_univoco, quantita_da_aggiungere):
+        """Incrementa la quantità di un alimento esistente"""
+        try:
+            result = alimenti_collection.update_one(
+                {"id_univoco": id_univoco},
+                {"$inc": {"quantita": quantita_da_aggiungere}}
+            )
+            print(f"✅ Quantità incrementata per {id_univoco}")
+            return result
+        except Exception as e:
+            print(f"❌ Errore incremento: {e}")
+            return None
     
     @staticmethod
     def aggiorna_alimento(user_id, id_univoco, updates):
