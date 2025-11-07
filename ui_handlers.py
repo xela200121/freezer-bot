@@ -5,7 +5,7 @@ import discord
 from database import DatabaseManager
 from config import GIORNI
 from views import (MenuPrincipale, ListaAlimentiView, GestioneAlimentoView,
-                   AggiungiAlimentoView, ImpostazioniView, ModificaAlimentoView,
+                   AggiungiAlimentoView, ModificaAlimentiView, ModificaAlimentoView,
                    SelezioneGiornoView, SelezioneOrarioView)
 
 
@@ -34,7 +34,7 @@ class UIHandlers:
             inline=False
         )
         embed.add_field(
-            name="⚙️ Impostazioni",
+            name="⚙️ Modifica alimenti",
             value="Modifica reminder e notifiche",
             inline=False
         )
@@ -209,7 +209,7 @@ class UIHandlers:
         await interaction.edit_original_response(embed=embed, view=view)
     
     @staticmethod
-    async def mostra_impostazioni(interaction: discord.Interaction):
+    async def mostra_modifica_alimenti(interaction: discord.Interaction):
         """Mostra menu impostazioni"""
         if not interaction.response.is_done():
             await interaction.response.defer()
@@ -218,18 +218,18 @@ class UIHandlers:
         
         if not alimenti:
             embed = discord.Embed(
-                title="⚙️ Impostazioni",
+                title="⚙️ Modifica alimenti",
                 description="Non hai ancora alimenti da configurare!",
                 color=discord.Color.orange()
             )
             view = MenuPrincipale()
         else:
             embed = discord.Embed(
-                title="⚙️ Impostazioni",
+                title="⚙️ Modifica alimenti",
                 description="Seleziona un alimento da modificare:",
                 color=discord.Color.blue()
             )
-            view = ImpostazioniView(interaction.user.id)
+            view = ModificaAlimentiView(interaction.user.id)
         
         await interaction.edit_original_response(embed=embed, view=view)
     

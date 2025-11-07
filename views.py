@@ -9,7 +9,7 @@ from models import AlimentoHelper
 
 
 class MenuPrincipale(ui.View):
-    """Menu principale con pulsanti Lista, Aggiungi, Impostazioni"""
+    """Menu principale con pulsanti Lista, Aggiungi, Modifica alimenti"""
     def __init__(self):
         super().__init__(timeout=None)
     
@@ -25,11 +25,11 @@ class MenuPrincipale(ui.View):
         await interaction.response.defer()
         await UIHandlers.mostra_menu_aggiungi(interaction)
     
-    @ui.button(label="⚙️ Impostazioni", style=discord.ButtonStyle.secondary, custom_id="impostazioni")
-    async def impostazioni_button(self, interaction: discord.Interaction, button: ui.Button):
+    @ui.button(label="⚙️ Modifica alimenti", style=discord.ButtonStyle.secondary, custom_id="modifica_alimenti")
+    async def modifica_alimenti_button(self, interaction: discord.Interaction, button: ui.Button):
         from ui_handlers import UIHandlers
         await interaction.response.defer()
-        await UIHandlers.mostra_impostazioni(interaction)
+        await UIHandlers.mostra_modifica_alimenti(interaction)
 
 
 class ListaAlimentiView(ui.View):
@@ -416,8 +416,8 @@ class ConfermaIncrementoView(ui.View):
 
 
 
-class ImpostazioniView(ui.View):
-    """View per le impostazioni"""
+class ModificaAlimentiView(ui.View):
+    """View per la modifica degli alimenti"""
     def __init__(self, user_id):
         super().__init__(timeout=180)
         self.user_id = user_id

@@ -30,10 +30,10 @@ class BotCommands:
             """Comando /aggiungi"""
             await UIHandlers.mostra_menu_aggiungi(interaction)
         
-        @bot.tree.command(name="impostazioni", description="Modifica impostazioni alimenti")
-        async def impostazioni_command(interaction: discord.Interaction):
-            """Comando /impostazioni"""
-            await UIHandlers.mostra_impostazioni(interaction)
+        @bot.tree.command(name="modifica_alimenti", description="Modifica impostazioni alimenti")
+        async def modifica_alimenti_command(interaction: discord.Interaction):
+            """Comando /modifica_alimenti"""
+            await UIHandlers.mostra_modifica_alimenti(interaction)
         
         @bot.tree.command(name="help", description="Guida all'uso di FreezerBot")
         async def help_command(interaction: discord.Interaction):
@@ -49,7 +49,7 @@ class BotCommands:
                 value="`/menu` - Apri il menu principale\n"
                       "`/lista` - Vedi tutti gli alimenti\n"
                       "`/aggiungi` - Aggiungi alimenti\n"
-                      "`/impostazioni` - Modifica configurazioni",
+                      "`/modifica_alimenti` - Modifica configurazioni alimenti",
                 inline=False
             )
             

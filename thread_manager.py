@@ -127,7 +127,7 @@ class ThreadManager:
             inline=False
         )
         menu_embed.add_field(
-            name="⚙️ Impostazioni",
+            name="⚙️ Modifica alimenti",
             value="Modifica reminder e notifiche",
             inline=False
         )
