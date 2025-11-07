@@ -71,9 +71,11 @@ class BotCommands:
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        @bot.tree.command(name="pulisci", description="Cancella tutti i messaggi nel thread (escluso il menu principale)")
-        async def pulisci_command(interaction: discord.Interaction):
-            """Comando per pulire la cronologia del thread"""
+        @bot.tree.command(name="reset", description="Resetta completamente il thread (elimina e ricrea)")
+        async def reset_command(interaction: discord.Interaction):
+            """Comando per resettare il thread completamente"""
+            print("🔴 COMANDO RESET AVVIATO")
+            
             await interaction.response.defer(ephemeral=True)
             
             try:
@@ -85,41 +87,55 @@ class BotCommands:
                     )
                     return
                 
-                # Verifica che sia il thread dell'utente
-                thread_data = DatabaseManager.get_user_thread(interaction.guild.id, interaction.user.id)
-                if not thread_data or str(interaction.channel.id) != thread_data['thread_id']:
-                    await interaction.followup.send(
-                        "⚠️ Puoi usare questo comando solo nel tuo thread personale!",
-                        ephemeral=True
-                    )
-                    return
+                print(f"✅ È un thread: {interaction.channel.name}")
+                thread_name = interaction.channel.name
+                channel = interaction.channel.parent
+                user = interaction.user
+                guild = interaction.guild
                 
-                # Conta e elimina i messaggi
-                deleted_count = 0
-                async for message in interaction.channel.history(limit=100):
-                    # Non eliminare il messaggio di benvenuto e il menu principale
-                    if message.author == interaction.client.user:
-                        # Controlla se ha il menu principale (view con bottoni)
-                        if message.components:
-                            continue
-                    
-                    try:
-                        await message.delete()
-                        deleted_count += 1
-                    except discord.Forbidden:
-                        continue
-                    except discord.NotFound:
-                        continue
+                # Archivia il thread vecchio
+                try:
+                    print("🔄 Archiviando thread vecchio...")
+                    await interaction.channel.edit(archived=True)
+                    print("✅ Thread archiviato")
+                except Exception as e:
+                    print(f"⚠️ Errore nell'archiviare thread: {e}")
                 
+                # Crea un nuovo thread con lo stesso nome
+                print("🔄 Creando nuovo thread...")
+                new_thread = await channel.create_thread(
+                    name=thread_name,
+                    type=discord.ChannelType.private_thread
+                )
+                print(f"✅ Nuovo thread creato: {new_thread.id}")
+                
+                # Aggiorna il database con il nuovo thread ID
+                print("🔄 Aggiornando database...")
+                DatabaseManager.save_user_thread(guild.id, user.id, channel.id, new_thread.id)
+                print("✅ Database aggiornato")
+                
+                # Invia il messaggio di benvenuto nel nuovo thread
+                print("🔄 Inviando messaggio di benvenuto...")
+                await ThreadManager._invia_messaggio_benvenuto(new_thread, user)
+                print("✅ Messaggio di benvenuto inviato")
+                
+                # Notifica l'utente nel vecchio thread
                 await interaction.followup.send(
-                    f"🧹 Thread pulito! Eliminati **{deleted_count}** messaggi.",
+                    f"♻️ Thread resettato! Vai al nuovo thread: {new_thread.mention}",
                     ephemeral=True
                 )
+                
+                print(f"✅ RESET COMPLETATO")
                 
             except Exception as e:
-                print(f"Errore pulizia thread: {e}")
-                await interaction.followup.send(
-                    "❌ Errore durante la pulizia del thread.",
-                    ephemeral=True
-                )
-
+                print(f"❌ ERRORE CRITICO: {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                try:
+                    await interaction.followup.send(
+                        f"❌ Errore durante il reset: {str(e)}",
+                        ephemeral=True
+                    )
+                except:
+                    print("❌ Impossibile inviare messaggio di errore")

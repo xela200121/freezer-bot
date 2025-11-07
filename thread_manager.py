@@ -48,6 +48,14 @@ class ThreadManager:
                 reason=f"Thread privato per {member.name}",
                 invitable=False
             )
+
+            await thread.edit(
+            overwrites={
+                member.guild.default_role: discord.PermissionOverwrite(view_channel=False),  # ← Nega a @everyone
+                member: discord.PermissionOverwrite(view_channel=True),  # ← Permetti all'utente
+                member.guild.me: discord.PermissionOverwrite(view_channel=True)  # ← Permetti al bot
+            }
+            )
             
             print(f"✅ Thread privato creato per {member.name}")
             
