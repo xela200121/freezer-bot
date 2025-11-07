@@ -459,33 +459,73 @@ class ModificaAlimentoView(ui.View):
     
     @ui.button(label="📅 Cambia Giorno", style=discord.ButtonStyle.primary)
     async def cambia_giorno(self, interaction: discord.Interaction, button: ui.Button):
+        print("🔴 BOTTONE CAMBIA GIORNO PREMUTO")
+        
         options = [discord.SelectOption(label=giorno, value=str(num)) 
-                  for num, giorno in GIORNI.items()]
+                for num, giorno in GIORNI.items()]
         
         select = ui.Select(placeholder="Nuovo giorno", options=options)
         
         async def callback(inter):
+            print("🔵 CALLBACK SELECT AVVIATA")
             await inter.response.defer()
-            nuovo_giorno = int(inter.data['values'][0])
-            reminder_day = AlimentoHelper.calcola_reminder_day(nuovo_giorno)
             
-            DatabaseManager.aggiorna_alimento(
-                self.user_id, self.id_univoco,
-                {
-                    "scongela_per_giorno": nuovo_giorno,
-                    "reminder_day": reminder_day
-                }
-            )
-            
-            await inter.edit_original_response(
-                content=f"✅ Giorno aggiornato a **{GIORNI[nuovo_giorno]}**!",
-                view=None
-            )
+            try:
+                nuovo_giorno = int(inter.data['values'][0])
+                print(f"📝 Nuovo giorno: {nuovo_giorno}")
+                
+                reminder_day = AlimentoHelper.calcola_reminder_day(nuovo_giorno)
+                
+                # Calcola nuovo id_univoco
+                nuovo_id_univoco = AlimentoHelper.crea_id_univoco(
+                    self.alimento['nome_alimento'],
+                    nuovo_giorno,
+                    self.alimento['portion_to_buy'],
+                    self.user_id
+                )
+                
+                # Elimina il vecchio alimento
+                DatabaseManager.rimuovi_alimento(self.user_id, self.id_univoco)
+                print("✅ Vecchio alimento eliminato")
+                
+                # Prepara il nuovo alimento aggiornato
+                alimento_aggiornato = self.alimento.copy()
+                alimento_aggiornato['id_univoco'] = nuovo_id_univoco
+                alimento_aggiornato['scongela_per_giorno'] = nuovo_giorno
+                alimento_aggiornato['reminder_day'] = reminder_day
+                
+                # Inserisci il nuovo alimento
+                DatabaseManager.inserisci_alimento_nuovo(alimento_aggiornato)
+                print("✅ Nuovo alimento inserito")
+                
+                # ⭐ IMPORTANTE: Aggiorna self.alimento con i nuovi dati
+                self.alimento = alimento_aggiornato
+                self.id_univoco = nuovo_id_univoco
+                print(f"✅ self.alimento aggiornato: Giorno {GIORNI[nuovo_giorno]}")
+                
+                # ⭐ Ricrea l'embed CON i dati aggiornati
+                from ui_handlers import UIHandlers
+                embed = UIHandlers.crea_embed_alimento(self.alimento)
+                
+                await inter.edit_original_response(
+                    embed=embed,
+                    view=self
+                )
+                print("✅ CALLBACK COMPLETATA")
+                
+            except Exception as e:
+                print(f"❌ ERRORE: {e}")
+                import traceback
+                traceback.print_exc()
+
         
         select.callback = callback
         view = ui.View()
         view.add_item(select)
+        print("🔄 Mostrando select menu...")
         await interaction.response.edit_message(view=view)
+        print("✅ SELECT MENU VISUALIZZATO")
+
     
     @ui.button(label="🕐 Cambia Orario", style=discord.ButtonStyle.primary)
     async def cambia_orario(self, interaction: discord.Interaction, button: ui.Button):
