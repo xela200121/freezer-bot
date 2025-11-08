@@ -34,7 +34,7 @@ class BotEvents:
                 scheduler.add_job(
                     lambda: NotificationManager.controlla_reminder(bot), 
                     'interval', 
-                    minutes=20
+                    minutes=5
                 )
                 scheduler.start()
                 print('✅ Scheduler notifiche avviato')
