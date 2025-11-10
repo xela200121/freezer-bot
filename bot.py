@@ -97,14 +97,11 @@ async def on_ready():
 
 async def main():
     """Funzione principale per avviare bot e web server"""
-    # Avvia web server per Render
-    await WebServer.start_web_server()
-    
     # Registra comandi ed eventi
     BotCommands.setup_commands(bot)
     BotEvents.setup_events(bot, scheduler)
     
-    # Avvia web server in background
+    # Avvia web server in background (UNA VOLTA SOLA!)
     asyncio.create_task(WebServer.start_web_server())
     
     # Avvia il bot
