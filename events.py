@@ -11,41 +11,12 @@ class BotEvents:
     
     @staticmethod
     def setup_events(bot, scheduler):
-        """Registra tutti gli eventi del bot"""
+        """
+        Registra gli eventi del bot.
         
-        @bot.event
-        async def on_ready():
-            """Evento quando il bot si connette"""
-            from notifications import NotificationManager
-            
-            print(f'✅ Bot connesso come {bot.user}')
-            print(f'ID: {bot.user.id}')
-            print('-------------------')
-            
-            # Sincronizza i comandi slash
-            try:
-                synced = await bot.tree.sync()
-                print(f'✅ Sincronizzati {len(synced)} comandi')
-            except Exception as e:
-                print(f'❌ Errore sincronizzazione comandi: {e}')
-            
-            # Avvia scheduler per notifiche
-            if not scheduler.running:
-                scheduler.add_job(
-                    lambda: NotificationManager.controlla_reminder(bot), 
-                    'interval', 
-                    minutes=5
-                )
-                scheduler.start()
-                print('✅ Scheduler notifiche avviato')
-            
-            # Imposta stato del bot
-            await bot.change_presence(
-                activity=discord.Activity(
-                    type=discord.ActivityType.watching,
-                    name="il tuo freezer 🧊 | /menu"
-                )
-            )
+        NOTA: on_ready è definito in bot.py/main.py per gestire lo scheduler.
+        Qui registriamo solo on_member_join e on_command_error.
+        """
         
         @bot.event
         async def on_member_join(member):

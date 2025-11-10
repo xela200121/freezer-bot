@@ -1,4 +1,4 @@
-# main.py
+# bot.py
 """Entry point principale del bot"""
 
 import discord
@@ -45,10 +45,11 @@ async def on_ready():
         # ========== JOB 1: PREPARA NOTIFICHE GIORNALIERE ==========
         # Esegue ogni giorno a mezzanotte e 1 minuto
         scheduler.add_job(
-            lambda: asyncio.create_task(NotificationManager.prepara_notifiche_giornaliere(bot)),
+            NotificationManager.prepara_notifiche_giornaliere,
             'cron',
             hour=0,
             minute=1,
+            args=[bot],
             id='prepara_notifiche',
             replace_existing=True
         )
@@ -57,9 +58,10 @@ async def on_ready():
         # ========== JOB 2: ELABORA CODA NOTIFICHE ==========
         # Esegue ogni minuto per elaborare la coda
         scheduler.add_job(
-            lambda: asyncio.create_task(NotificationManager.elabora_coda_notifiche(bot)),
+            NotificationManager.elabora_coda_notifiche,
             'interval',
             minutes=1,
+            args=[bot],
             id='elabora_coda',
             replace_existing=True
         )
@@ -68,7 +70,7 @@ async def on_ready():
         # ========== JOB 3: PULIZIA NOTIFICHE VECCHIE ==========
         # Esegue ogni giorno alle 2:00 di notte
         scheduler.add_job(
-            lambda: asyncio.create_task(NotificationManager.pulisci_notifiche_vecchie()),
+            NotificationManager.pulisci_notifiche_vecchie,
             'cron',
             hour=2,
             minute=0,
