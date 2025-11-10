@@ -1,8 +1,8 @@
 # notifications.py
-"""Sistema di notifiche e reminder"""
+"""Sistema di notifiche e reminder con coda persistente"""
 
 import discord
-from datetime import datetime
+from datetime import datetime, timedelta
 from database import DatabaseManager
 from config import GIORNI
 
@@ -10,7 +10,7 @@ from config import GIORNI
 class ConfermaScongelamentoView(discord.ui.View):
     """View per confermare lo scongelamento dalla notifica"""
     def __init__(self, alimento_id, user_id):
-        super().__init__(timeout=None)  # Nessun timeout per le notifiche
+        super().__init__(timeout=None) 
         self.alimento_id = alimento_id
         self.user_id = user_id
     
@@ -20,7 +20,6 @@ class ConfermaScongelamentoView(discord.ui.View):
         try:
             await interaction.response.defer()
             
-            # Recupera l'alimento
             alimento = DatabaseManager.get_alimento_by_id(self.user_id, self.alimento_id)
             
             if not alimento:
@@ -30,7 +29,6 @@ class ConfermaScongelamentoView(discord.ui.View):
                 )
                 return
             
-            # Diminuisci la quantità di 1
             nuova_quantita = DatabaseManager.aggiorna_quantita(
                 self.user_id, 
                 self.alimento_id, 
@@ -44,7 +42,6 @@ class ConfermaScongelamentoView(discord.ui.View):
                 )
                 return
             
-            # Crea embed di conferma
             embed = discord.Embed(
                 title="✅ Scongelamento Confermato!",
                 description=f"**{alimento['nome_alimento'].capitalize()}** scongelato correttamente.",
@@ -56,7 +53,6 @@ class ConfermaScongelamentoView(discord.ui.View):
                 inline=True
             )
             
-            # Se la quantità è arrivata a 1, avvisa
             if nuova_quantita == 1:
                 embed.add_field(
                     name="⚠️ Attenzione",
@@ -65,7 +61,6 @@ class ConfermaScongelamentoView(discord.ui.View):
                 )
                 embed.color = discord.Color.orange()
             
-            # Se la quantità è 0, avvisa che è finito
             if nuova_quantita == 0:
                 embed.add_field(
                     name="🔴 Alimento Terminato",
@@ -74,7 +69,6 @@ class ConfermaScongelamentoView(discord.ui.View):
                 )
                 embed.color = discord.Color.red()
             
-            # Disabilita il bottone dopo il click
             button.disabled = True
             button.label = "✅ Confermato"
             
@@ -83,7 +77,6 @@ class ConfermaScongelamentoView(discord.ui.View):
                 view=self
             )
             
-            # Se la quantità è arrivata a 1, invia anche la notifica di quantità finita
             if nuova_quantita == 1:
                 user = await interaction.client.fetch_user(int(self.user_id))
                 await NotificationManager.notifica_quantita_finita(user, alimento)
@@ -100,7 +93,7 @@ class ConfermaScongelamentoView(discord.ui.View):
 
 
 class NotificationManager:
-    """Manager per gestire le notifiche"""
+    """Manager per gestire le notifiche con sistema di coda"""
     
     @staticmethod
     async def notifica_quantita_finita(user, alimento):
@@ -124,32 +117,74 @@ class NotificationManager:
             
             await user.send(embed=embed)
         except discord.Forbidden:
-            print(f"Impossibile inviare DM a {user.id}")
-    
+            print(f"❌ Impossibile inviare DM a {user.id}")
+        
     @staticmethod
-    async def controlla_reminder(bot):
-        """Controlla e invia reminder programmati"""
-        ora_attuale = datetime.now()
-        giorno_attuale = ora_attuale.weekday() + 1  # 1=lunedì
-        ora_formattata = ora_attuale.strftime("%H:00")
+    async def prepara_notifiche_giornaliere(bot):
+        """Prepara le notifiche del giorno corrente (esegue a mezzanotte)"""
+        oggi = datetime.now()
+        giorno_oggi = oggi.weekday() + 1
+        data_oggi = oggi.date()
         
-        print(f"🔔 Controllo reminder: {GIORNI[giorno_attuale]} alle {ora_formattata}")
+        print(f"📅 Preparazione notifiche per {GIORNI[giorno_oggi]} ({data_oggi})")
         
-        # Cerca tutti gli alimenti con reminder per oggi a quest'ora
-        alimenti = DatabaseManager.get_alimenti_per_reminder(giorno_attuale, ora_formattata)
+        alimenti = DatabaseManager.get_alimenti_per_giorno(giorno_oggi)
         
+        count = 0
         for alimento in alimenti:
-            # Controlla se già notificato oggi
-            ultima_notifica = alimento.get('ultima_notifica')
+            esiste = DatabaseManager.notifica_in_coda_esiste(
+                alimento['_id'], 
+                data_oggi.isoformat()
+            )
             
-            if ultima_notifica:
-                ultima_data = datetime.fromisoformat(ultima_notifica)
-                if ultima_data.date() == ora_attuale.date():
-                    print(f"⏭️ {alimento['nome_alimento']} già notificato oggi")
-                    continue  # Già notificato oggi
-            
+            if not esiste:
+                ora_reminder = alimento['reminder_hours'] 
+                datetime_notifica = datetime.combine(
+                    data_oggi, 
+                    datetime.strptime(ora_reminder, "%H:%M").time()
+                )
+                
+                success = DatabaseManager.crea_notifica_in_coda(
+                    alimento_id=alimento['_id'],
+                    user_id=alimento['user_id'],
+                    alimento_nome=alimento['nome_alimento'],
+                    data_notifica=data_oggi.isoformat(),
+                    orario_notifica=ora_reminder,
+                    datetime_notifica=datetime_notifica.isoformat()
+                )
+                
+                if success:
+                    count += 1
+                    print(f"  ➕ Notifica preparata: {alimento['nome_alimento']} per user {alimento['user_id']}")
+        
+        print(f"✅ {count} notifiche preparate per oggi")
+        
+    @staticmethod
+    async def elabora_coda_notifiche(bot):
+        """Elabora la coda e invia le notifiche pronte"""
+        ora_attuale = datetime.now()
+        
+        notifiche_da_inviare = DatabaseManager.get_notifiche_da_inviare(ora_attuale.isoformat())
+        
+        for notifica in notifiche_da_inviare:
             try:
-                user = await bot.fetch_user(int(alimento['user_id']))
+                alimento = DatabaseManager.get_alimento_by_object_id(notifica['alimento_id'])
+                
+                if not alimento:
+                    DatabaseManager.marca_notifica_come_fallita(
+                        notifica['_id'], 
+                        "Alimento non trovato"
+                    )
+                    continue
+                
+                if alimento['quantita'] <= 0:
+                    DatabaseManager.marca_notifica_come_skipped(
+                        notifica['_id'], 
+                        "Quantità 0"
+                    )
+                    continue
+                
+                user = await bot.fetch_user(int(notifica['user_id']))
                 
                 embed = discord.Embed(
                     title="📢 Promemoria Scongelamento!",
@@ -173,22 +208,53 @@ class NotificationManager:
                 )
                 embed.set_footer(text="Clicca il bottone quando hai scongelato!")
                 
-                # Aggiungi la view con il bottone di conferma
                 view = ConfermaScongelamentoView(alimento['id_univoco'], alimento['user_id'])
                 
                 await user.send(embed=embed, view=view)
                 
-                print(f"✅ Notifica inviata a {user.name} per {alimento['nome_alimento']}")
-                
-                # Aggiorna ultima notifica
-                DatabaseManager.aggiorna_ultima_notifica(
-                    alimento['_id'], 
-                    ora_attuale.isoformat()
+                DatabaseManager.marca_notifica_come_inviata(
+                    notifica['_id'],
+                    notifica['tentativi']
                 )
                 
+                DatabaseManager.aggiorna_ultima_notifica(
+                    alimento['_id'],
+                    datetime.now().isoformat()
+                )
+                
+                print(f"✅ Notifica inviata: {alimento['nome_alimento']} a {user.name}")
+                
             except discord.Forbidden:
-                print(f"❌ Impossibile inviare DM a {alimento['user_id']}")
+                DatabaseManager.incrementa_tentativi_notifica(
+                    notifica['_id'],
+                    "DM chiusi"
+                )
+                print(f"❌ DM chiusi per user {notifica['user_id']}")
+                
             except Exception as e:
-                print(f"❌ Errore invio notifica: {e}")
-                import traceback
-                traceback.print_exc()
+                DatabaseManager.incrementa_tentativi_notifica(
+                    notifica['_id'],
+                    str(e)
+                )
+                print(f"❌ Errore notifica: {e}")
+        
+        failed_count = DatabaseManager.marca_notifiche_failed_per_max_tentativi()
+        if failed_count > 0:
+            print(f"⚠️ {failed_count} notifiche marcate come failed (max tentativi raggiunto)")
+    
+    
+    @staticmethod
+    async def pulisci_notifiche_vecchie():
+        """Rimuove notifiche più vecchie di 7 giorni"""
+        deleted_count = DatabaseManager.elimina_notifiche_vecchie(giorni=7)
+        print(f"🧹 Rimosse {deleted_count} notifiche vecchie")
+    
+    
+    @staticmethod
+    async def controlla_reminder(bot):
+        """
+        Metodo legacy per retrocompatibilità.
+        Da rimuovere dopo il passaggio completo al sistema di coda.
+        """
+        print("⚠️ Metodo legacy controlla_reminder chiamato - considera di usare elabora_coda_notifiche")
+        await NotificationManager.elabora_coda_notifiche(bot)
