@@ -12,6 +12,8 @@ from datetime import datetime
 from database import DatabaseManager
 from models import AlimentoHelper
 from config import GIORNI, GIORNI_INVERSO
+import mongo_logger
+logger = mongo_logger.logger
 
 # Il modello Vosk viene scaricato una volta e riutilizzato
 VOSK_MODEL_PATH = "./vosk-model-small-it-0.22"  # Modello italiano
@@ -27,12 +29,12 @@ class VoiceHandler:
         """Carica il modello Vosk"""
         try:
             if not VoiceHandler.model:
-                print("📥 Caricamento modello Vosk italiano...")
+                logger.info("📥 Caricamento modello Vosk italiano...")
                 VoiceHandler.model = Model(VOSK_MODEL_PATH)
-                print("✅ Modello Vosk caricato!")
+                logger.info("✅ Modello Vosk caricato!")
         except Exception as e:
-            print(f"❌ Errore caricamento modello Vosk: {e}")
-            print("💡 Scarica il modello con: python download_vosk_model.py")
+            logger.info(f"❌ Errore caricamento modello Vosk: {e}")
+            logger.info("💡 Scarica il modello con: python download_vosk_model.py")
     
     @staticmethod
     async def processa_messaggio_vocale(message: discord.Message):
