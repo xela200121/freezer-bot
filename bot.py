@@ -10,6 +10,7 @@ from config import TOKEN
 from commands import BotCommands
 from events import BotEvents
 from web_server import WebServer
+from voice_handler import VoiceHandler
 
 # Configurazione intents
 intents = discord.Intents.default()
@@ -100,6 +101,7 @@ async def on_ready():
 async def main():
     """Funzione principale per avviare bot e web server"""
     # Registra comandi ed eventi
+    VoiceHandler.carica_modello()
     BotCommands.setup_commands(bot)
     BotEvents.setup_events(bot, scheduler)
     
