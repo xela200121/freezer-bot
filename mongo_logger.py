@@ -7,7 +7,7 @@ from pymongo import MongoClient, ASCENDING
 
 # Recupera URI MongoDB dall'env
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-DB_NAME = "freezerbot"
+DB_NAME = "freezer-bot"
 COLLECTION_NAME = "logs"
 
 # =========================
